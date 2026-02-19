@@ -11,6 +11,7 @@ beforeAll(async () => {
   expectValidJwt(testUserAuthToken);
 });
 
+
 test('login', async () => {
   const loginRes = await request(app).put('/api/auth').send(testUser);
   expect(loginRes.status).toBe(200);
@@ -20,6 +21,39 @@ test('login', async () => {
   delete expectedUser.password;
   expect(loginRes.body.user).toMatchObject(expectedUser);
 });
+
+test('logout', async () => {
+  const loginRes = await request(app).put('/api/auth').send(testUser);
+  const token = loginRes.body.token;
+  expectValidJwt(token);
+
+  const logoutRes = await request(app)
+    .delete('/api/auth')
+    .set('Authorization', `Bearer ${token}`)
+    .send();
+
+  expect(logoutRes.status).toBe(200);
+  expect(logoutRes.body).toMatchObject({ message: 'logout successful' });
+});
+
+test('failed registration with missing fields', async () => {
+  const missingName = { email: 'missing@field.com', password: '123' };
+  let res = await request(app).post('/api/auth').send(missingName);
+  expect(res.status).toBe(400);
+  expect(res.body.message).toMatch(/name, email, and password are required/i);
+
+  const missingEmail = { name: 'Test', password: '123' };
+  res = await request(app).post('/api/auth').send(missingEmail);
+  expect(res.status).toBe(400);
+  expect(res.body.message).toMatch(/name, email, and password are required/i);
+
+  const missingPassword = { name: 'Test', email: 'missing@field.com' };
+  res = await request(app).post('/api/auth').send(missingPassword);
+  expect(res.status).toBe(400);
+  expect(res.body.message).toMatch(/name, email, and password are required/i);
+});
+
+
 
 function expectValidJwt(potentialJwt) {
   expect(potentialJwt).toMatch(/^[a-zA-Z0-9\-_]*\.[a-zA-Z0-9\-_]*\.[a-zA-Z0-9\-_]*$/);
