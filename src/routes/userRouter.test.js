@@ -55,6 +55,14 @@ test('list users unauthorized', async () => {
   expect(listUsersRes.status).toBe(401);
 });
 
+test('list users forbidden for non-admin user', async () => {
+  const [, userToken] = await registerUser(request(app));
+  const res = await request(app)
+    .get('/api/user')
+    .set('Authorization', 'Bearer ' + userToken);
+  expect(res.status).toBe(403);
+  expect(res.body).toHaveProperty('message', 'unauthorized');
+});
 
 test('list users allowed for admin user', async () => {
   const adminUser = await createAdminUser();
@@ -70,11 +78,24 @@ test('list users allowed for admin user', async () => {
 });
 
 
+
+async function registerUser(service) {
+  const testUser = {
+    name: 'pizza diner',
+    email: `${randomName()}@test.com`,
+    password: 'a',
+  };
+  const registerRes = await service.post('/api/auth').send(testUser);
+  registerRes.body.user.password = testUser.password;
+
+  return [registerRes.body.user, registerRes.body.token];
+}
+
 function randomName() {
   return Math.random().toString(36).substring(2, 12);
 }
 
- 
+
 
 function expectValidJwt(potentialJwt) {
   expect(potentialJwt).toMatch(/^[a-zA-Z0-9\-_]*\.[a-zA-Z0-9\-_]*\.[a-zA-Z0-9\-_]*$/);

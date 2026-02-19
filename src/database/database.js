@@ -99,6 +99,74 @@ class DB {
     }
   }
 
+  async listUsers({ page, limit, name }) {
+  const connection = await this.getConnection();
+  try {
+    const offset = page * limit;
+    const nameFilter = name.replace(/\*/g, '%');
+    
+    // MySQL doesn't allow placeholders for LIMIT/OFFSET, so we validate and inject them safely
+    // Ensure limit and offset are integers to prevent SQL injection
+    const safeLimit = parseInt(limit, 10);
+    const safeOffset = parseInt(offset, 10);
+    
+    if (isNaN(safeLimit) || isNaN(safeOffset)) {
+      throw new Error('Invalid pagination parameters');
+    }
+    
+    // Get users matching the filter with pagination
+    const users = await this.query(
+      connection, 
+      `SELECT id, name, email FROM user WHERE name LIKE ? LIMIT ${safeLimit} OFFSET ${safeOffset}`, 
+      [nameFilter]
+    );
+    
+    // Get roles for each user
+    for (const user of users) {
+      const roleResult = await this.query(
+        connection, 
+        `SELECT role, objectId FROM userRole WHERE userId=?`, 
+        [user.id]
+      );
+      user.roles = roleResult.map((r) => {
+        return { objectId: r.objectId || undefined, role: r.role };
+      });
+    }
+    
+    return users;
+  } finally {
+    connection.end();
+  }
+}
+
+
+async deleteUser(userId) {
+  const connection = await this.getConnection();
+  try {
+    await connection.beginTransaction();
+    try {
+      // Delete user roles first (foreign key constraint)
+      await this.query(connection, `DELETE FROM userRole WHERE userId=?`, [userId]);
+      
+      // Delete auth tokens
+      await this.query(connection, `DELETE FROM auth WHERE userId=?`, [userId]);
+      
+      // Delete the user
+      await this.query(connection, `DELETE FROM user WHERE id=?`, [userId]);
+      
+      await connection.commit();
+    } catch (err) {
+      await connection.rollback();
+      console.error('Failed to delete user:', err);
+      throw new StatusCodeError('unable to delete user', 500);
+    }
+  } finally {
+    connection.end();
+  }
+}
+
+
+
   async loginUser(userId, token) {
     token = this.getTokenSignature(token);
     const connection = await this.getConnection();
@@ -144,6 +212,8 @@ class DB {
       connection.end();
     }
   }
+
+  
 
   async addDinerOrder(user, order) {
     const connection = await this.getConnection();
@@ -208,7 +278,7 @@ class DB {
 
     const offset = page * limit;
     nameFilter = nameFilter.replace(/\*/g, '%');
-
+ 
     try {
       let franchises = await this.query(connection, `SELECT id, name FROM franchise WHERE name LIKE ? LIMIT ${limit + 1} OFFSET ${offset}`, [nameFilter]);
 

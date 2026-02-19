@@ -22,6 +22,32 @@ userRouter.docs = [
     example: `curl -X PUT localhost:3000/api/user/1 -d '{"name":"常用名字", "email":"a@jwt.com", "password":"admin"}' -H 'Content-Type: application/json' -H 'Authorization: Bearer tttttt'`,
     response: { user: { id: 1, name: '常用名字', email: 'a@jwt.com', roles: [{ role: 'admin' }] }, token: 'tttttt' },
   },
+  {
+    method: 'GET',
+    path: '/api/user?page=0&limit=10&name=*',
+    requiresAuth: true,
+    description: 'Gets a list of users',
+    example: `curl -X GET localhost:3000/api/user -H 'Authorization: Bearer tttttt'`,
+    response: {
+      users: [
+        {
+          id: 1,
+          name: '常用名字',
+          email: 'a@jwt.com',
+          roles: [{ role: 'admin' }],
+        },
+      ],
+      more: false,
+    },
+  },
+  {
+    method: 'DELETE',
+    path: '/api/user/:userId',
+    requiresAuth: true,
+    description: 'Delete a user',
+    example: `curl -X DELETE localhost:3000/api/user/1 -H 'Authorization: Bearer tttttt'`,
+    response: {},
+  },
 ];
 
 // getUser
@@ -33,6 +59,27 @@ userRouter.get(
   })
 );
 
+// listUsers
+userRouter.get(
+  '/',
+  authRouter.authenticateToken,
+  asyncHandler(async (req, res) => {
+    // Only admins can list users
+    if (!req.user.isRole(Role.Admin)) {
+      return res.status(403).json({ message: 'unauthorized' });
+    }
+
+    const page = Number(req.query.page) || 0;
+    const limit = Number(req.query.limit) || 10;
+    const name = req.query.name || '*';
+
+    const users = await DB.listUsers({ page, limit, name });
+    const more = users.length === limit;
+
+    res.json({ users, more });
+  })
+);
+
 // updateUser
 userRouter.put(
   '/:userId',
@@ -41,6 +88,7 @@ userRouter.put(
     const { name, email, password } = req.body;
     const userId = Number(req.params.userId);
     const user = req.user;
+    
     if (user.id !== userId && !user.isRole(Role.Admin)) {
       return res.status(403).json({ message: 'unauthorized' });
     }
@@ -56,16 +104,18 @@ userRouter.delete(
   '/:userId',
   authRouter.authenticateToken,
   asyncHandler(async (req, res) => {
-    res.json({ message: 'not implemented' });
-  })
-);
+    const userId = Number(req.params.userId);
 
-// listUsers
-userRouter.get(
-  '/',
-  authRouter.authenticateToken,
-  asyncHandler(async (req, res) => {
-    res.json({ message: 'not implemented', users: [], more: false });
+    if (!req.user.isRole(Role.Admin)) {
+      return res.status(403).json({ message: 'unauthorized' });
+    }
+
+    if (req.user.id === userId) {
+      return res.status(403).json({ message: 'cannot delete yourself' });
+    }
+
+    await DB.deleteUser(userId);
+    res.status(200).send({});
   })
 );
 
