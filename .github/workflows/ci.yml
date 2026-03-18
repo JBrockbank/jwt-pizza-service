@@ -62,6 +62,12 @@ jobs:
               url: 'https://pizza-factory.cs329.click',
               apiKey: '${{ secrets.FACTORY_API_KEY }}',
             },
+            metrics: {
+              source: 'jwt-pizza-service',
+              endpointUrl: '${{ secrets.METRICS_ENDPOINT_URL }}',
+              apiKey: '${{ secrets.METRICS_API_KEY }}',
+              accountId: '${{ secrets.METRICS_ACCOUNT_ID_KEY }}',
+            },            
           };" > src/config.js
 
       - name: Tests
@@ -143,36 +149,3 @@ jobs:
       - name: Deploy new container
         run: |
           aws ecs update-service --cluster jwt-pizza-service --service jwt-pizza-service --force-new-deployment
-
-      - name: Write config file
-        run: |
-          mkdir -p src
-          cat << 'EOF' > src/config.js
-          module.exports = {
-            jwtSecret: '${{ secrets.JWT_SECRET }}',
-            db: {
-              connection: {
-                host: '${{ secrets.DB_HOSTNAME }}',
-                user: 'root',
-                password: '${{ secrets.DB_PASSWORD }}',
-                database: 'pizza',
-                connectTimeout: 60000
-              },
-              listPerPage: 10
-            },
-            factory: {
-              url: 'https://pizza-factory.cs329.click',
-              apiKey: '${{ secrets.FACTORY_API_KEY }}'
-            },
-            metrics: {
-              source: 'jwt-pizza-service',
-              endpointUrl: '${{ secrets.METRICS_ENDPOINT_URL }}',
-              apiKey: '${{ secrets.METRICS_API_KEY }}',
-              accountId: '${{ secrets.METRICS_ACCOUNT_ID_KEY }}'
-            }
-          };
-          EOF
-
-
-
-          
