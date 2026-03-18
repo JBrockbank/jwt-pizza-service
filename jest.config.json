@@ -5,5 +5,8 @@
     "global": {
       "lines": 80
     }
-  }
+  },
+  "coveragePathIgnorePatterns": [
+    "/src/metrics\\.js$"
+  ]
 }

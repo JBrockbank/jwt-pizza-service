@@ -1,7 +1,7 @@
 // metrics.js
-const config = require('./config');
-const os = require('os');
-const fetch = require('node-fetch'); // ensure node-fetch is installed
+const config = require("./config");
+const os = require("os");
+const fetch = require("node-fetch"); // ensure node-fetch is installed
 
 // ------------------------
 // In-memory metric storage
@@ -10,19 +10,22 @@ const requests = {};
 
 let authSuccess = 0;
 let authFail = 0;
-const activeUsers = new Set();
-
+const activeUsers = new Map();
 let pizzasSold = 0;
 let pizzaFailures = 0;
 let revenue = 0;
-let pizzaLatencies = [];
-
+let pizzaLatencyTotal = 0;
+let pizzaLatencyCount = 0;
 // ------------------------
 // Middleware: track requests
 // ------------------------
 function requestTracker(req, res, next) {
   const endpoint = `[${req.method}] ${req.path}`;
   requests[endpoint] = (requests[endpoint] || 0) + 1;
+
+  const userId = req.user?.id || req.ip;
+  activeUsers.set(userId, Date.now());
+
   next();
 }
 
@@ -32,46 +35,77 @@ function requestTracker(req, res, next) {
 function trackAuth(success, userId) {
   if (success) {
     authSuccess++;
-    if (userId) activeUsers.add(userId);
+    if (userId) activeUsers.set(userId, Date.now());
   } else {
     authFail++;
   }
+}
+
+function getActiveUserCount() {
+  const now = Date.now();
+  const timeout = 5 * 60 * 1000; // 5 minutes
+
+  for (const [userId, lastSeen] of activeUsers.entries()) {
+    if (now - lastSeen > timeout) {
+      activeUsers.delete(userId);
+    }
+  }
+
+  return activeUsers.size;
 }
 
 // ------------------------
 // Pizza tracking
 // ------------------------
 function pizzaPurchase(success, latencyMs, price) {
+//   console.log("PIZZA PURCHASE FUNCTION HIT");
   if (success) {
     pizzasSold++;
-    revenue += price;
+    revenue += Number(price) || 0;
+    // console.log("PIZZA SUCCESS", pizzasSold, revenue);
   } else {
     pizzaFailures++;
   }
-  pizzaLatencies.push(latencyMs);
+
+  pizzaLatencyTotal += Number(latencyMs) || 0;
+  pizzaLatencyCount++;
 }
 
 // ------------------------
 // System metrics
 // ------------------------
 function getCpuUsage() {
-  return (os.loadavg()[0] / os.cpus().length) * 100;
+  const cpus = os.cpus();
+  let idle = 0,
+    total = 0;
+
+  cpus.forEach((core) => {
+    for (let type in core.times) total += core.times[type] || 0;
+    idle += core.times.idle || 0;
+  });
+
+  if (total === 0) return 0;
+
+  const usage = 100 - (idle / total) * 100;
+  return Math.max(0, Math.min(100, usage));
 }
 
 function getMemoryUsage() {
-  const used = os.totalmem() - os.freemem();
-  return (used / os.totalmem()) * 100;
-}
+  const total = os.totalmem();
+  if (!total) return 0;
 
+  const used = total - os.freemem();
+  return (used / total) * 100;
+}
 // ------------------------
 // Metric builder
 // ------------------------
-function createMetric(name, value, attributes = {}) {
+function createCounterMetric(name, value, attributes = {}) {
   attributes = { ...attributes, source: config.metrics.source };
 
   return {
     name,
-    unit: '1',
+    unit: "1",
     sum: {
       dataPoints: [
         {
@@ -83,8 +117,29 @@ function createMetric(name, value, attributes = {}) {
           })),
         },
       ],
-      aggregationTemporality: 'AGGREGATION_TEMPORALITY_CUMULATIVE',
+      aggregationTemporality: "AGGREGATION_TEMPORALITY_CUMULATIVE",
       isMonotonic: true,
+    },
+  };
+}
+
+function createGaugeMetric(name, value, attributes = {}) {
+  attributes = { ...attributes, source: config.metrics.source };
+
+  return {
+    name,
+    unit: "1",
+    gauge: {
+      dataPoints: [
+        {
+          asDouble: value,
+          timeUnixNano: Date.now() * 1_000_000,
+          attributes: Object.entries(attributes).map(([k, v]) => ({
+            key: k,
+            value: { stringValue: String(v) },
+          })),
+        },
+      ],
     },
   };
 }
@@ -97,57 +152,77 @@ function sendMetrics() {
 
   // Requests per endpoint
   Object.keys(requests).forEach((endpoint) => {
-    metrics.push(createMetric('requests_total', requests[endpoint], { endpoint }));
+    metrics.push(
+      createCounterMetric("requests_total", requests[endpoint], { endpoint }),
+    );
   });
 
   // Auth
-  metrics.push(createMetric('auth_success_total', authSuccess));
-  metrics.push(createMetric('auth_failure_total', authFail));
+  metrics.push(
+    createCounterMetric("auth_success_total", authSuccess, {
+      outcome: "success",
+    }),
+  );
+  metrics.push(
+    createCounterMetric("auth_failure_total", authFail, { outcome: "failure" }),
+  );
 
   // Active users
-  metrics.push(createMetric('active_users', activeUsers.size));
+  metrics.push(createGaugeMetric("active_users", getActiveUserCount()));
 
-  // Pizza metrics
-  const avgPizzaLatency =
-    pizzaLatencies.length > 0
-      ? pizzaLatencies.reduce((a, b) => a + b, 0) / pizzaLatencies.length
-      : 0;
+  metrics.push(
+    createCounterMetric("pizzas_sold_total", pizzasSold, {
+      outcome: "success",
+    }),
+  );
+  metrics.push(
+    createCounterMetric("pizza_failures_total", pizzaFailures, {
+      outcome: "failure",
+    }),
+  );
+  metrics.push(createCounterMetric("pizza_revenue_total", revenue));
+  if (pizzaLatencyCount > 0) {
+    const avgPizzaLatency = pizzaLatencyTotal / pizzaLatencyCount;
 
-  metrics.push(createMetric('pizzas_sold_total', pizzasSold));
-  metrics.push(createMetric('pizza_failures_total', pizzaFailures));
-  metrics.push(createMetric('pizza_revenue_total', revenue));
-  metrics.push({
-    name: 'pizza_latency_ms_avg',
-    unit: 'ms',
-    gauge: {
-      dataPoints: [
-        {
-          asDouble: avgPizzaLatency,
-          timeUnixNano: Date.now() * 1_000_000,
-          attributes: [{ key: 'source', value: { stringValue: config.metrics.source } }],
-        },
-      ],
-    },
-  });
+    metrics.push({
+      name: "pizza_latency_ms_avg",
+      unit: "ms",
+      gauge: {
+        dataPoints: [
+          {
+            asDouble: avgPizzaLatency,
+            timeUnixNano: Date.now() * 1_000_000,
+            attributes: [
+              { key: "source", value: { stringValue: config.metrics.source } },
+            ],
+          },
+        ],
+      },
+    });
+  }
 
   // System metrics
-  metrics.push(createMetric('cpu_percent', getCpuUsage()));
-  metrics.push(createMetric('memory_percent', getMemoryUsage()));
+  metrics.push(createGaugeMetric("cpu_percent", getCpuUsage()));
+  metrics.push(createGaugeMetric("memory_percent", getMemoryUsage()));
 
   // Build OTLP payload
   const body = { resourceMetrics: [{ scopeMetrics: [{ metrics }] }] };
 
   fetch(config.metrics.endpointUrl, {
-    method: 'POST',
+    method: "POST",
     headers: {
       Authorization: `Bearer ${config.metrics.accountId}:${config.metrics.apiKey}`,
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
-  }).catch((err) => console.error('Metrics error:', err));
+  }).catch((err) => console.error("Metrics error:", err));
 
   // Reset pizza latencies after reporting
-  pizzaLatencies.length = 0;
+  //   pizzaLatencyTotal = 0;
+  //   pizzaLatencyCount = 0;
+
+//   console.log("METRICS REPORT", pizzasSold, revenue);
+//   console.log(JSON.stringify(metrics, null, 2));
 }
 
 // ------------------------

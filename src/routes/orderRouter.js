@@ -95,6 +95,8 @@ orderRouter.post(
       });
 
       const j = await r.json();
+      // console.log("Factory status:", r.status);
+      // console.log("Factory response:", j);
       const latency = Date.now() - startTime;
 
       if (r.ok) {
@@ -104,6 +106,7 @@ orderRouter.post(
 
         res.send({ order, followLinkToEndChaos: j.reportUrl, jwt: j.jwt });
       } else {
+        // console.log("Factory FAILED", r.status, j);
         // Failure metrics
         metrics.pizzaPurchase(false, latency, 0);
 
