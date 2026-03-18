@@ -150,24 +150,25 @@ jobs:
             jwtSecret: '${{ secrets.JWT_SECRET }}',
             db: {
               connection: {
-                host: '${{ secrets.DB_HOSTNAME }}',        # ← RDS endpoint
+                host: '${{ secrets.DB_HOSTNAME }}',
                 user: 'root',
-                password: '${{ secrets.DB_PASSWORD }}',    # ← Real DB password
+                password: '${{ secrets.DB_PASSWORD }}',
                 database: 'pizza',
-                connectTimeout: 60000,
+                connectTimeout: 60000
               },
-              listPerPage: 10,
+              listPerPage: 10
             },
             factory: {
               url: 'https://pizza-factory.cs329.click',
-              apiKey: '${{ secrets.FACTORY_API_KEY }}',
+              apiKey: '${{ secrets.FACTORY_API_KEY }}'
             },
             metrics: {
               source: 'jwt-pizza-service',
-              endpointUrl: '${{ secrets.METRICS_ENDPOINT_URL }}',    # ← Fixed comma
+              endpointUrl: '${{ secrets.METRICS_ENDPOINT_URL }}',
               apiKey: '${{ secrets.METRICS_API_KEY }}',
-              accountId: '${{ secrets.METRICS_ACCOUNT_ID_KEY }}',
-            },            
+              accountId: '${{ secrets.METRICS_ACCOUNT_ID_KEY }}'
+            }
           };" > src/config.js
+
 
           
