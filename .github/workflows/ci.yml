@@ -146,15 +146,17 @@ jobs:
 
       - name: Write config file
         run: |
-          echo "module.exports = {
-          jwtSecret: '${{ secrets.JWT_SECRET }}',
-          db: {
-            connection: {
-              host: '127.0.0.1',
-              user: 'root',
-              password: 'tempdbpassword',
-              database: 'pizza',
-              connectTimeout: 60000,
+          mkdir -p src
+          cat <<EOL > src/config.js
+          module.exports = {
+            jwtSecret: '${{ secrets.JWT_SECRET }}',
+            db: {
+              connection: {
+                host: '127.0.0.1',
+                user: 'root',
+                password: 'tempdbpassword',
+                database: 'pizza',
+                connectTimeout: 60000,
             },
             listPerPage: 10,
           },
@@ -168,6 +170,6 @@ jobs:
             apiKey: '${{ secrets.METRICS_API_KEY }}',
             accountId: '${{ secrets.METRICS_ACCOUNT_ID_KEY }}',
           },            
-          };" > src/config.js
+          };
 
           
