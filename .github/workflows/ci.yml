@@ -146,30 +146,28 @@ jobs:
 
       - name: Write config file
         run: |
-          mkdir -p src
-          cat <<EOL > src/config.js
-          module.exports = {
+          echo "module.exports = {
             jwtSecret: '${{ secrets.JWT_SECRET }}',
             db: {
               connection: {
-                host: '127.0.0.1',
+                host: '${{ secrets.DB_HOSTNAME }}',        # ← RDS endpoint
                 user: 'root',
-                password: 'tempdbpassword',
+                password: '${{ secrets.DB_PASSWORD }}',    # ← Real DB password
                 database: 'pizza',
                 connectTimeout: 60000,
+              },
+              listPerPage: 10,
             },
-            listPerPage: 10,
-          },
-          factory: {
-            url: 'https://pizza-factory.cs329.click',
-            apiKey: '${{ secrets.FACTORY_API_KEY }}',
-          },
-          metrics: {
-            source: 'jwt-pizza-service',
-            endpointUrl: '${{ secrets.METRICS_ENDPOINT_URL }}',
-            apiKey: '${{ secrets.METRICS_API_KEY }}',
-            accountId: '${{ secrets.METRICS_ACCOUNT_ID_KEY }}',
-          },            
-          };
+            factory: {
+              url: 'https://pizza-factory.cs329.click',
+              apiKey: '${{ secrets.FACTORY_API_KEY }}',
+            },
+            metrics: {
+              source: 'jwt-pizza-service',
+              endpointUrl: '${{ secrets.METRICS_ENDPOINT_URL }}',    # ← Fixed comma
+              apiKey: '${{ secrets.METRICS_API_KEY }}',
+              accountId: '${{ secrets.METRICS_ACCOUNT_ID_KEY }}',
+            },            
+          };" > src/config.js
 
           
