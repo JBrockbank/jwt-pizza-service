@@ -1,5 +1,10 @@
 // metrics.js
-const config = require("./config");
+const config = require("./config") || {};
+if (!config.metrics) {
+  console.log("Metrics config missing - skipping metrics");
+  module.exports = { requestTracker, trackAuth, pizzaPurchase };
+  return;
+}
 const os = require("os");
 const fetch = require("node-fetch"); // ensure node-fetch is installed
 
