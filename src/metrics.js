@@ -111,7 +111,6 @@ function getMemoryUsage() {
 
 
 function createCounterMetric(name, value, attributes = {}) {
-    const config = require('./config.js') || {};
     const metricsConfig = config.metrics || {};
     attributes = { ...attributes, source: metricsConfig.source || 'jwt-pizza-service' };
   return {
@@ -135,8 +134,8 @@ function createCounterMetric(name, value, attributes = {}) {
 }
 
 function createGaugeMetric(name, value, attributes = {}) {
-  attributes = { ...attributes, source: config.metrics.source };
-
+    const metricsConfig = config.metrics || {};  // Use global config
+    attributes = { ...attributes, source: metricsConfig.source || 'jwt-pizza-service' };
   return {
     name,
     unit: "1",
