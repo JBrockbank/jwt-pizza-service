@@ -1,12 +1,15 @@
 // metrics.js
-const config = require("./config") || {};
-if (!config.metrics) {
-  console.log("Metrics config missing - skipping metrics");
-  module.exports = { requestTracker, trackAuth, pizzaPurchase };
-  return;
-}
+// const config = require("./config") || {};
 const os = require("os");
 const fetch = require("node-fetch"); // ensure node-fetch is installed
+
+let config;
+try {
+  config = require('./config.js');
+} catch (err) {
+  console.error('Failed to load config:', err.message);
+  config = {};
+}
 
 // ------------------------
 // In-memory metric storage
@@ -105,9 +108,12 @@ function getMemoryUsage() {
 // ------------------------
 // Metric builder
 // ------------------------
-function createCounterMetric(name, value, attributes = {}) {
-  attributes = { ...attributes, source: config.metrics.source };
 
+
+function createCounterMetric(name, value, attributes = {}) {
+    const config = require('./config.js') || {};
+    const metricsConfig = config.metrics || {};
+    attributes = { ...attributes, source: metricsConfig.source || 'jwt-pizza-service' };
   return {
     name,
     unit: "1",

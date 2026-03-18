@@ -99,6 +99,20 @@ jobs:
 
           cat dist/config.js
 
+      - name: Validate config
+        run: |
+          node -e "
+            try {
+              const config = require('./dist/config.js');
+              console.log('✓ Config loaded:', config.metrics?.source);
+              if (!config.metrics?.source) throw new Error('Missing metrics.source');
+            } catch (err) {
+              console.error('✗ Config validation failed:', err.message);
+              process.exit(1);
+            }
+          "
+    
+
       - name: Update distribution artifact
         uses: actions/upload-artifact@v4
         with:
