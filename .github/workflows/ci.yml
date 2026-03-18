@@ -146,7 +146,9 @@ jobs:
 
       - name: Write config file
         run: |
-          echo "module.exports = {
+          mkdir -p src
+          cat << 'EOF' > src/config.js
+          module.exports = {
             jwtSecret: '${{ secrets.JWT_SECRET }}',
             db: {
               connection: {
@@ -168,7 +170,9 @@ jobs:
               apiKey: '${{ secrets.METRICS_API_KEY }}',
               accountId: '${{ secrets.METRICS_ACCOUNT_ID_KEY }}'
             }
-          };" > src/config.js
+          };
+          EOF
+
 
 
           
