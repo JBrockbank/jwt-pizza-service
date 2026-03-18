@@ -7,7 +7,6 @@ const fetch = require('node-fetch'); // ensure node-fetch is installed
 // In-memory metric storage
 // ------------------------
 const requests = {};
-let totalRequests = 0;
 
 let authSuccess = 0;
 let authFail = 0;
@@ -24,7 +23,6 @@ let pizzaLatencies = [];
 function requestTracker(req, res, next) {
   const endpoint = `[${req.method}] ${req.path}`;
   requests[endpoint] = (requests[endpoint] || 0) + 1;
-  totalRequests++;
   next();
 }
 
