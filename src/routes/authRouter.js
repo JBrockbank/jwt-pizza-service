@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const config = require('../config.js');
 const { asyncHandler } = require('../endpointHelper.js');
 const { DB, Role } = require('../database/database.js');
+const metrics = require('../metrics');
 
 const authRouter = express.Router();
 
@@ -65,6 +66,9 @@ authRouter.post(
     }
     const user = await DB.addUser({ name, email, password, roles: [{ role: Role.Diner }] });
     const auth = await setAuth(user);
+
+    metrics.trackAuth(true, user.id);
+
     res.json({ user: user, token: auth });
   })
 );
@@ -75,7 +79,14 @@ authRouter.put(
   asyncHandler(async (req, res) => {
     const { email, password } = req.body;
     const user = await DB.getUser(email, password);
+
+    if (!user) {
+      metrics.trackAuth(false); // failed login
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
     const auth = await setAuth(user);
+    metrics.trackAuth(true, user.id); // successful login
     res.json({ user: user, token: auth });
   })
 );
