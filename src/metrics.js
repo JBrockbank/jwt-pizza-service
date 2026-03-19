@@ -172,6 +172,9 @@ function createGaugeMetric(name, value, attributes = {}) {
 // ------------------------
 // Send metrics to Grafana
 // ------------------------
+// ------------------------
+// Send metrics to Grafana
+// ------------------------
 function sendMetrics() {
   const metrics = [];
 
@@ -206,57 +209,56 @@ function sendMetrics() {
     }),
   );
   metrics.push(createCounterMetric("pizza_revenue_total", revenue));
-  // In sendMetrics(), replace the entire pizza + latency section:
-if (pizzaLatencyCount > 0) {
-  const avgPizzaLatency = pizzaLatencyTotal / pizzaLatencyCount;
-  metrics.push({
-    name: "pizza_latency_ms_avg",
-    unit: "ms",
-    gauge: {
-      dataPoints: [{
-        asDouble: avgPizzaLatency,
-        timeUnixNano: Date.now() * 1_000_000,
-        attributes: [{ key: "source", value: { stringValue: config.metrics.source } }],
-      }],
-    },
-  });
-}
 
-// Report ALL endpoint latencies
-Object.entries(endpointLatencies).forEach(([endpoint, stats]) => {
-  if (stats.count > 0) {
-    metrics.push(createGaugeMetric("http_request_duration_ms", stats.avg, { endpoint }));
+  // Pizza latency (avg)
+  if (pizzaLatencyCount > 0) {
+    const avgPizzaLatency = pizzaLatencyTotal / pizzaLatencyCount;
+    metrics.push({
+      name: "pizza_latency_ms_avg",
+      unit: "ms",
+      gauge: {
+        dataPoints: [{
+          asDouble: avgPizzaLatency,
+          timeUnixNano: Date.now() * 1_000_000,
+          attributes: [{ key: "source", value: { stringValue: config.metrics?.source || "jwt-pizza-service" } }],
+        }],
+      },
+    });
   }
-});
-}
+
+  // All endpoint latencies
+  Object.entries(endpointLatencies).forEach(([endpoint, stats]) => {
+    if (stats.count > 0) {
+      metrics.push(createGaugeMetric("http_request_duration_ms", stats.avg, { endpoint }));
+    }
+  });
 
   // System metrics
   metrics.push(createGaugeMetric("cpu_percent", getCpuUsage()));
   metrics.push(createGaugeMetric("memory_percent", getMemoryUsage()));
 
-  // Build OTLP payload
+  // Build OTLP payload and send
   const body = { resourceMetrics: [{ scopeMetrics: [{ metrics }] }] };
 
-  fetch(config.metrics.endpointUrl, {
+  fetch(config.metrics?.endpointUrl, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${config.metrics.accountId}:${config.metrics.apiKey}`,
+      Authorization: `Bearer ${config.metrics?.accountId}:${config.metrics?.apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
   }).catch((err) => console.error("Metrics error:", err));
 
-  // Reset pizza latencies after reporting
-  //   pizzaLatencyTotal = 0;
-  //   pizzaLatencyCount = 0;
-
-//   console.log("METRICS REPORT", pizzasSold, revenue);
-//   console.log(JSON.stringify(metrics, null, 2));
+  // Optional: reset pizza latency counters
+  // pizzaLatencyTotal = 0;
+  // pizzaLatencyCount = 0;
+}
 
 // ------------------------
 // Periodic reporting every 10s
 // ------------------------
 setInterval(sendMetrics, 10000);
+
 
 // ------------------------
 // Exports
