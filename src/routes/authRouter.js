@@ -62,6 +62,7 @@ authRouter.post(
   asyncHandler(async (req, res) => {
     const { name, email, password } = req.body;
     if (!name || !email || !password) {
+      metrics.trackAuth(false, null);
       return res.status(400).json({ message: 'name, email, and password are required' });
     }
     const user = await DB.addUser({ name, email, password, roles: [{ role: Role.Diner }] });
@@ -81,7 +82,7 @@ authRouter.put(
     const user = await DB.getUser(email, password);
 
     if (!user) {
-      metrics.trackAuth(false); // failed login
+      metrics.trackAuth(false, null);
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 

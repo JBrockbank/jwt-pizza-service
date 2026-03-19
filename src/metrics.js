@@ -24,18 +24,33 @@ let pizzaFailures = 0;
 let revenue = 0;
 let pizzaLatencyTotal = 0;
 let pizzaLatencyCount = 0;
+const endpointLatencies = new Map();
 // ------------------------
 // Middleware: track requests
 // ------------------------
 function requestTracker(req, res, next) {
   const endpoint = `[${req.method}] ${req.path}`;
   requests[endpoint] = (requests[endpoint] || 0) + 1;
-
+  
   const userId = req.user?.id || req.ip;
   activeUsers.set(userId, Date.now());
-
+  
+  // Start timing
+  const start = Date.now();
+  
+  // Track latency when response finishes
+  res.on('finish', () => {
+    const latency = Date.now() - start;
+    const stats = endpointLatencies.get(endpoint) || {total: 0, count: 0};
+    stats.total += latency;
+    stats.count += 1;
+    stats.avg = stats.total / stats.count;
+    endpointLatencies.set(endpoint, stats);
+  });
+  
   next();
 }
+
 
 // ------------------------
 // Auth tracking
@@ -191,25 +206,29 @@ function sendMetrics() {
     }),
   );
   metrics.push(createCounterMetric("pizza_revenue_total", revenue));
-  if (pizzaLatencyCount > 0) {
-    const avgPizzaLatency = pizzaLatencyTotal / pizzaLatencyCount;
+  // In sendMetrics(), replace the entire pizza + latency section:
+if (pizzaLatencyCount > 0) {
+  const avgPizzaLatency = pizzaLatencyTotal / pizzaLatencyCount;
+  metrics.push({
+    name: "pizza_latency_ms_avg",
+    unit: "ms",
+    gauge: {
+      dataPoints: [{
+        asDouble: avgPizzaLatency,
+        timeUnixNano: Date.now() * 1_000_000,
+        attributes: [{ key: "source", value: { stringValue: config.metrics.source } }],
+      }],
+    },
+  });
+}
 
-    metrics.push({
-      name: "pizza_latency_ms_avg",
-      unit: "ms",
-      gauge: {
-        dataPoints: [
-          {
-            asDouble: avgPizzaLatency,
-            timeUnixNano: Date.now() * 1_000_000,
-            attributes: [
-              { key: "source", value: { stringValue: config.metrics.source } },
-            ],
-          },
-        ],
-      },
-    });
+// Report ALL endpoint latencies
+Object.entries(endpointLatencies).forEach(([endpoint, stats]) => {
+  if (stats.count > 0) {
+    metrics.push(createGaugeMetric("http_request_duration_ms", stats.avg, { endpoint }));
   }
+});
+}
 
   // System metrics
   metrics.push(createGaugeMetric("cpu_percent", getCpuUsage()));
@@ -233,7 +252,6 @@ function sendMetrics() {
 
 //   console.log("METRICS REPORT", pizzasSold, revenue);
 //   console.log(JSON.stringify(metrics, null, 2));
-}
 
 // ------------------------
 // Periodic reporting every 10s
