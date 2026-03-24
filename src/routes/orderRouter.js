@@ -4,8 +4,10 @@ const { Role, DB } = require('../database/database.js');
 const { authRouter } = require('./authRouter.js');
 const { asyncHandler, StatusCodeError } = require('../endpointHelper.js');
 const metrics = require('../metrics');
+const logger = require('../logger.js');
 
 const orderRouter = express.Router();
+orderRouter.use(logger.httpLogger);
 
 orderRouter.docs = [
   {
@@ -74,7 +76,6 @@ orderRouter.get(
 );
 
 // createOrder
-// createOrder
 orderRouter.post(
   '/',
   authRouter.authenticateToken,
@@ -82,42 +83,45 @@ orderRouter.post(
     const orderReq = req.body;
     const order = await DB.addDinerOrder(req.user, orderReq);
 
-    const startTime = Date.now(); // track latency
+    const startTime = Date.now();
 
     try {
+      const factoryPayload = { 
+        diner: { id: req.user.id, name: req.user.name, email: req.user.email }, 
+        order 
+      };
+      
       const r = await fetch(`${config.factory.url}/api/order`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json', 
           authorization: `Bearer ${config.factory.apiKey}` 
         },
-        body: JSON.stringify({ diner: { id: req.user.id, name: req.user.name, email: req.user.email }, order }),
+        body: JSON.stringify(factoryPayload),
       });
 
       const j = await r.json();
-      // console.log("Factory status:", r.status);
-      // console.log("Factory response:", j);
       const latency = Date.now() - startTime;
 
+      // LOG FACTORY CALL
+      logger.logFactory(factoryPayload, j, r.status, r.ok);
+
       if (r.ok) {
-        // Success metrics
         const totalPrice = order.items.reduce((sum, item) => sum + item.price, 0);
         metrics.pizzaPurchase(true, latency, totalPrice);
-
         res.send({ order, followLinkToEndChaos: j.reportUrl, jwt: j.jwt });
       } else {
-        // console.log("Factory FAILED", r.status, j);
-        // Failure metrics
         metrics.pizzaPurchase(false, latency, 0);
-
         res.status(500).send({ message: 'Failed to fulfill order at factory', followLinkToEndChaos: j.reportUrl });
       }
     } catch (err) {
       const latency = Date.now() - startTime;
+      logger.logFactory(null, null, 0, false);  // Log failed factory call
       metrics.pizzaPurchase(false, latency, 0);
       throw new StatusCodeError('Factory request failed', 500, err);
     }
   })
 );
+
 
 module.exports = orderRouter;
