@@ -8,10 +8,6 @@ const logger = require('../logger.js');
 
 const authRouter = express.Router();
 authRouter.use(logger.httpLogger);
-authRouter.use((req, res, next) => {
-  console.log('🔥 AUTH ROUTER HIT:', req.method, req.path);
-  next();
-});
 
 
 authRouter.docs = [

@@ -169,21 +169,27 @@ function createGaugeMetric(name, value, attributes = {}) {
   };
 }
 
-// ------------------------
+
 // Send metrics to Grafana
-// ------------------------
-// ------------------------
-// Send metrics to Grafana
-// ------------------------
 function sendMetrics() {
   const metrics = [];
 
-  // Requests per endpoint
-  Object.keys(requests).forEach((endpoint) => {
-    metrics.push(
-      createCounterMetric("requests_total", requests[endpoint], { endpoint }),
-    );
-  });
+// Requests per endpoint (with method label)
+Object.entries(requests).forEach(([endpointKey, count]) => {
+  // Parse "[GET] /api/order/menu" → method = "GET", path = "/api/order/menu"
+  const match = endpointKey.match(/^\[(.+?)\]\s*(.+)$/);
+  const method = match ? match[1].trim() : "UNKNOWN";
+  const path = match ? match[2].trim() : endpointKey;
+
+  metrics.push(
+    createCounterMetric("requests_total", count, {
+      endpoint: path,
+      method,
+      source: config.metrics?.source || "jwt-pizza-service",
+    })
+  );
+});
+
 
   // Auth
   metrics.push(
