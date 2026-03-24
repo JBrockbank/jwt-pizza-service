@@ -27,7 +27,6 @@ async function sendToGrafana(stream, event) {
     ],
   };
 
-
   try {
     const res = await fetch(config.logging.endpointUrl, {
       method: "POST",
@@ -38,6 +37,7 @@ async function sendToGrafana(stream, event) {
       },
     });
     if (!res.ok) console.warn("Grafana log push failed:", res.status);
+    /* eslint-disable-next-line no-unused-vars */
   } catch (e) {
     // Fail silently
   }
@@ -48,8 +48,8 @@ function log(stream, event) {
   sendToGrafana(stream, safeEvent);
 }
 
-// Express HTTP request logging middleware
-httpLogger = (req, res, next) => {
+// Fixed: Declare httpLogger as a named function [web:3]
+function httpLogger(req, res, next) {
   let responseBody;
 
   // Override BOTH res.json AND res.send
@@ -79,7 +79,7 @@ httpLogger = (req, res, next) => {
   });
 
   next();
-};
+}
 
 // Express error logging middleware
 function errorLogger(err, req, res, next) {
